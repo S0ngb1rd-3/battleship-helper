@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battleship Helper</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Battleship Strategy Helper</h1>
+
+        <div class="controls">
+            <button id="toggleHeatmapBtn" class="btn btn-primary">Show Heat Map</button>
+            <button id="resetBtn" class="btn btn-secondary">Reset Game</button>
+        </div>
+
+        <div class="game-area">
+            <div class="grid-container">
+                <div id="gameGrid" class="game-grid"></div>
+                <canvas id="heatmapCanvas" class="heatmap-overlay" style="display: none;"></canvas>
+            </div>
+
+            <div class="info-panel">
+                <div class="stats">
+                    <div class="stat">
+                        <span class="label">Total Shots:</span>
+                        <span id="shotCount" class="value">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Hits:</span>
+                        <span id="hitCount" class="value">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Misses:</span>
+                        <span id="missCount" class="value">0</span>
+                    </div>
+                </div>
+
+                <div class="fleet-info">
+                    <h3>Expected Fleet</h3>
+                    <ul id="fleetList"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>

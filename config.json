@@ -1,0 +1,9 @@
+{
+  "boardSize": 10,
+  "fleet": [
+    {"name": "Battleship", "size": 4, "count": 1},
+    {"name": "Cruiser", "size": 3, "count": 2},
+    {"name": "Destroyer", "size": 2, "count": 3},
+    {"name": "Submarine", "size": 1, "count": 4}
+  ]
+}
