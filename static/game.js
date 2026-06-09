@@ -160,100 +160,79 @@ function getHeatColor(probability) {
 }
 
 function calculateHeatmap() {
-    const heatmap = Array(gameState.boardSize)
-        .fill(null)
-        .map(() => Array(gameState.boardSize).fill(0));
+    const size = gameState.boardSize;
+    const counts = Array(size).fill(null).map(() => Array(size).fill(0));
 
-    // Get all confirmed hits
-    const hits = [];
+    // Build lookup sets for fast access
+    const missSet = new Set();
+    const hitSet = new Set();
     for (const [posStr, type] of Object.entries(gameState.shots)) {
-        if (type === 'hit') {
-            const [row, col] = posStr.split(',').map(Number);
-            hits.push({ row, col });
-        }
+        if (type === 'miss') missSet.add(posStr);
+        else if (type === 'hit') hitSet.add(posStr);
     }
 
-    // Get all confirmed misses
-    const misses = new Set(
-        Object.entries(gameState.shots)
-            .filter(([_, type]) => type === 'miss')
-            .map(([pos]) => pos)
-    );
+    // Placements that cover a known hit are far more likely than placements in
+    // open water — weight them heavily so the heat concentrates around hits and
+    // their natural extensions (the "ends" of a partially-found ship).
+    const BASE_WEIGHT = 1;
+    const HIT_WEIGHT = 12;
 
-    // For each empty cell, calculate probability it contains a ship
-    for (let row = 0; row < gameState.boardSize; row++) {
-        for (let col = 0; col < gameState.boardSize; col++) {
-            const posStr = `${row},${col}`;
+    for (const ship of gameState.fleet) {
+        // Horizontal placements
+        for (let row = 0; row < size; row++) {
+            for (let startCol = 0; startCol <= size - ship.size; startCol++) {
+                let valid = true;
+                let hitCoverage = 0;
 
-            // Skip if already a confirmed miss
-            if (misses.has(posStr)) {
-                heatmap[row][col] = 0;
-                continue;
-            }
+                for (let c = startCol; c < startCol + ship.size; c++) {
+                    if (missSet.has(`${row},${c}`)) { valid = false; break; }
+                    if (hitSet.has(`${row},${c}`)) hitCoverage++;
+                }
 
-            // If it's a hit, boost probability
-            if (gameState.shots[posStr] === 'hit') {
-                heatmap[row][col] = 0.8;
-                continue;
-            }
-
-            // Count valid ship placements that include this cell
-            let validPlacements = 0;
-            let totalPlacements = 0;
-
-            // Try all possible ships and placements
-            gameState.fleet.forEach(ship => {
-                for (let i = 0; i < ship.count; i++) {
-                    // Horizontal placements
-                    for (let startCol = 0; startCol <= gameState.boardSize - ship.size; startCol++) {
-                        if (col >= startCol && col < startCol + ship.size && row >= 0) {
-                            totalPlacements++;
-                            if (isValidPlacement(row, startCol, row, startCol + ship.size - 1, misses, hits)) {
-                                validPlacements++;
-                            }
-                        }
-                    }
-
-                    // Vertical placements
-                    for (let startRow = 0; startRow <= gameState.boardSize - ship.size; startRow++) {
-                        if (row >= startRow && row < startRow + ship.size && col >= 0) {
-                            totalPlacements++;
-                            if (isValidPlacement(startRow, col, startRow + ship.size - 1, col, misses, hits)) {
-                                validPlacements++;
-                            }
-                        }
+                if (valid) {
+                    const weight = (hitCoverage > 0 ? HIT_WEIGHT : BASE_WEIGHT) * ship.count;
+                    for (let c = startCol; c < startCol + ship.size; c++) {
+                        counts[row][c] += weight;
                     }
                 }
-            });
-
-            heatmap[row][col] = totalPlacements > 0 ? validPlacements / totalPlacements : 0;
-        }
-    }
-
-    return heatmap;
-}
-
-function isValidPlacement(startRow, startCol, endRow, endCol, misses, hits) {
-    // Check if placement intersects with any confirmed misses
-    if (startRow === endRow) {
-        // Horizontal
-        for (let c = startCol; c <= endCol; c++) {
-            if (misses.has(`${startRow},${c}`)) {
-                return false;
             }
         }
-    } else {
-        // Vertical
-        for (let r = startRow; r <= endRow; r++) {
-            if (misses.has(`${r},${startCol}`)) {
-                return false;
+
+        // Vertical placements
+        for (let startRow = 0; startRow <= size - ship.size; startRow++) {
+            for (let col = 0; col < size; col++) {
+                let valid = true;
+                let hitCoverage = 0;
+
+                for (let r = startRow; r < startRow + ship.size; r++) {
+                    if (missSet.has(`${r},${col}`)) { valid = false; break; }
+                    if (hitSet.has(`${r},${col}`)) hitCoverage++;
+                }
+
+                if (valid) {
+                    const weight = (hitCoverage > 0 ? HIT_WEIGHT : BASE_WEIGHT) * ship.count;
+                    for (let r = startRow; r < startRow + ship.size; r++) {
+                        counts[r][col] += weight;
+                    }
+                }
             }
         }
     }
 
-    // At least one cell in placement should be a hit or adjacent to hits (or uncovered)
-    // For now, we just need it to not intersect misses
-    return true;
+    // Zero out already-shot cells — their state is known, no point targeting them
+    for (const posStr of Object.keys(gameState.shots)) {
+        const [r, c] = posStr.split(',').map(Number);
+        counts[r][c] = 0;
+    }
+
+    // Normalize to [0, 1] relative to the hottest remaining cell
+    let max = 0;
+    for (let r = 0; r < size; r++)
+        for (let c = 0; c < size; c++)
+            if (counts[r][c] > max) max = counts[r][c];
+
+    if (max === 0) return counts;
+    return counts.map(row => row.map(v => v / max));
 }
 
 function resetGame() {
