@@ -112,6 +112,8 @@ function toggleHeatmap() {
 
     const btn = document.getElementById('toggleHeatmapBtn');
     btn.textContent = gameState.heatmapVisible ? 'Hide Heat Map' : 'Show Heat Map';
+
+    renderHeatmap();
 }
 
 function renderHeatmap() {
@@ -119,10 +121,9 @@ function renderHeatmap() {
 
     const canvas = document.getElementById('heatmapCanvas');
     const cellSize = 44; // 40px cell + 4px gap
-    const padding = 20;
 
-    canvas.width = gameState.boardSize * cellSize + 2 * padding;
-    canvas.height = gameState.boardSize * cellSize + 2 * padding;
+    canvas.width = gameState.boardSize * cellSize;
+    canvas.height = gameState.boardSize * cellSize;
 
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -134,8 +135,8 @@ function renderHeatmap() {
     for (let row = 0; row < gameState.boardSize; row++) {
         for (let col = 0; col < gameState.boardSize; col++) {
             const probability = heatmap[row][col];
-            const x = padding + col * cellSize + 2;
-            const y = padding + row * cellSize + 2;
+            const x = col * cellSize + 2;
+            const y = row * cellSize + 2;
 
             // Color gradient: cool (blue) for low probability, hot (red) for high
             const color = getHeatColor(probability);
