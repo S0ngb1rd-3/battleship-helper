@@ -181,17 +181,31 @@ function calculateHeatmap() {
         // Horizontal placements
         for (let row = 0; row < size; row++) {
             for (let startCol = 0; startCol <= size - ship.size; startCol++) {
+                const endCol = startCol + ship.size - 1;
                 let valid = true;
                 let hitCoverage = 0;
 
-                for (let c = startCol; c < startCol + ship.size; c++) {
+                // Reject if any cell in the placement is a miss
+                for (let c = startCol; c <= endCol; c++) {
                     if (missSet.has(`${row},${c}`)) { valid = false; break; }
                     if (hitSet.has(`${row},${c}`)) hitCoverage++;
                 }
 
+                // Reject if any hit cell lies adjacent to but OUTSIDE this placement.
+                // Ships can't touch, so a hit next to us belongs to a different ship —
+                // meaning this placement would violate the no-adjacency rule.
+                if (valid) {
+                    // Check the cells directly above and below each column
+                    for (let c = startCol; c <= endCol && valid; c++) {
+                        if (hitSet.has(`${row - 1},${c}`) || hitSet.has(`${row + 1},${c}`)) valid = false;
+                    }
+                    // Check the cells just off each end of the placement
+                    if (hitSet.has(`${row},${startCol - 1}`) || hitSet.has(`${row},${endCol + 1}`)) valid = false;
+                }
+
                 if (valid) {
                     const weight = (hitCoverage > 0 ? HIT_WEIGHT : BASE_WEIGHT) * ship.count;
-                    for (let c = startCol; c < startCol + ship.size; c++) {
+                    for (let c = startCol; c <= endCol; c++) {
                         counts[row][c] += weight;
                     }
                 }
@@ -201,17 +215,29 @@ function calculateHeatmap() {
         // Vertical placements
         for (let startRow = 0; startRow <= size - ship.size; startRow++) {
             for (let col = 0; col < size; col++) {
+                const endRow = startRow + ship.size - 1;
                 let valid = true;
                 let hitCoverage = 0;
 
-                for (let r = startRow; r < startRow + ship.size; r++) {
+                // Reject if any cell in the placement is a miss
+                for (let r = startRow; r <= endRow; r++) {
                     if (missSet.has(`${r},${col}`)) { valid = false; break; }
                     if (hitSet.has(`${r},${col}`)) hitCoverage++;
                 }
 
+                // Reject if any hit cell lies adjacent to but outside this placement
+                if (valid) {
+                    // Check the cells directly left and right of each row
+                    for (let r = startRow; r <= endRow && valid; r++) {
+                        if (hitSet.has(`${r},${col - 1}`) || hitSet.has(`${r},${col + 1}`)) valid = false;
+                    }
+                    // Check the cells just off each end of the placement
+                    if (hitSet.has(`${startRow - 1},${col}`) || hitSet.has(`${endRow + 1},${col}`)) valid = false;
+                }
+
                 if (valid) {
                     const weight = (hitCoverage > 0 ? HIT_WEIGHT : BASE_WEIGHT) * ship.count;
-                    for (let r = startRow; r < startRow + ship.size; r++) {
+                    for (let r = startRow; r <= endRow; r++) {
                         counts[r][col] += weight;
                     }
                 }
