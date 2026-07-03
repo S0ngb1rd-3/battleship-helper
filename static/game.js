@@ -1,7 +1,10 @@
 let gameState = {
     boardSize: 10,
     fleet: [],
-    shots: {}, // { "row,col": "hit" | "miss" }
+    shots: {},        // { "row,col": "hit" | "miss" }
+    sunkShips: [],    // [{ size, cells: ["r,c", ...] }]
+    selecting: false, // whether "mark sunk" selection mode is active
+    selectedCells: [], // hit cells chosen during current selection
     heatmapVisible: false
 };
 
@@ -28,12 +31,17 @@ async function init() {
 
 function setupEventListeners() {
     document.getElementById('toggleHeatmapBtn').addEventListener('click', toggleHeatmap);
+    document.getElementById('markSunkBtn').addEventListener('click', enterSelectingMode);
+    document.getElementById('confirmSunkBtn').addEventListener('click', confirmSunk);
+    document.getElementById('cancelSunkBtn').addEventListener('click', exitSelectingMode);
     document.getElementById('resetBtn').addEventListener('click', resetGame);
 
-    // Grid cells are added dynamically, so use event delegation
     document.getElementById('gameGrid').addEventListener('click', (e) => {
-        if (e.target.classList.contains('grid-cell')) {
-            const [row, col] = e.target.dataset.pos.split(',').map(Number);
+        if (!e.target.classList.contains('grid-cell')) return;
+        const [row, col] = e.target.dataset.pos.split(',').map(Number);
+        if (gameState.selecting) {
+            toggleSelectCell(row, col);
+        } else {
             toggleShot(row, col);
         }
     });
@@ -44,17 +52,32 @@ function renderGrid() {
     grid.innerHTML = '';
     grid.style.gridTemplateColumns = `repeat(${gameState.boardSize}, 1fr)`;
 
+    if (gameState.selecting) {
+        grid.classList.add('selecting');
+    } else {
+        grid.classList.remove('selecting');
+    }
+
+    const sunkCellSet = new Set(gameState.sunkShips.flatMap(s => s.cells));
+    const selectedSet = new Set(gameState.selectedCells);
+
     for (let row = 0; row < gameState.boardSize; row++) {
         for (let col = 0; col < gameState.boardSize; col++) {
             const cell = document.createElement('div');
             cell.className = 'grid-cell';
             cell.dataset.pos = `${row},${col}`;
 
-            const shotKey = `${row},${col}`;
-            if (gameState.shots[shotKey] === 'hit') {
+            const key = `${row},${col}`;
+            if (sunkCellSet.has(key)) {
+                cell.classList.add('sunk');
+                cell.textContent = '✕';
+            } else if (selectedSet.has(key)) {
+                cell.classList.add('hit-selected');
+                cell.textContent = '●';
+            } else if (gameState.shots[key] === 'hit') {
                 cell.classList.add('hit');
                 cell.textContent = '●';
-            } else if (gameState.shots[shotKey] === 'miss') {
+            } else if (gameState.shots[key] === 'miss') {
                 cell.classList.add('miss');
                 cell.textContent = '○';
             } else {
@@ -98,11 +121,95 @@ function renderFleetInfo() {
     const fleetList = document.getElementById('fleetList');
     fleetList.innerHTML = '';
 
+    // Count how many of each size have been sunk
+    const sunkCounts = {};
+    for (const ship of gameState.sunkShips) {
+        sunkCounts[ship.size] = (sunkCounts[ship.size] || 0) + 1;
+    }
+
     gameState.fleet.forEach(ship => {
+        const sunk = sunkCounts[ship.size] || 0;
+        const remaining = ship.count - sunk;
         const li = document.createElement('li');
-        li.textContent = `${ship.count}x ${ship.name} (${ship.size} squares)`;
+        if (remaining <= 0) {
+            li.style.textDecoration = 'line-through';
+            li.style.color = '#bbb';
+        }
+        li.textContent = `${remaining}/${ship.count} ${ship.name} (${ship.size} sq)`;
         fleetList.appendChild(li);
     });
+}
+
+function enterSelectingMode() {
+    // Only enter if there are unsunk hit cells to select
+    const sunkCellSet = new Set(gameState.sunkShips.flatMap(s => s.cells));
+    const liveHits = Object.entries(gameState.shots)
+        .filter(([k, v]) => v === 'hit' && !sunkCellSet.has(k));
+    if (liveHits.length === 0) return;
+
+    gameState.selecting = true;
+    gameState.selectedCells = [];
+
+    document.getElementById('markSunkBtn').style.display = 'none';
+    document.getElementById('confirmSunkBtn').style.display = 'inline-block';
+    document.getElementById('confirmSunkBtn').disabled = true;
+    document.getElementById('cancelSunkBtn').style.display = 'inline-block';
+
+    renderGrid();
+}
+
+function exitSelectingMode() {
+    gameState.selecting = false;
+    gameState.selectedCells = [];
+
+    document.getElementById('markSunkBtn').style.display = 'inline-block';
+    document.getElementById('confirmSunkBtn').style.display = 'none';
+    document.getElementById('cancelSunkBtn').style.display = 'none';
+
+    renderGrid();
+}
+
+function toggleSelectCell(row, col) {
+    const key = `${row},${col}`;
+    // Only hit cells that aren't already sunk can be selected
+    const sunkCellSet = new Set(gameState.sunkShips.flatMap(s => s.cells));
+    if (gameState.shots[key] !== 'hit' || sunkCellSet.has(key)) return;
+
+    const idx = gameState.selectedCells.indexOf(key);
+    if (idx >= 0) {
+        gameState.selectedCells.splice(idx, 1);
+    } else {
+        gameState.selectedCells.push(key);
+    }
+
+    // Enable confirm if selection count matches any remaining ship size
+    const confirmBtn = document.getElementById('confirmSunkBtn');
+    confirmBtn.disabled = !matchesRemainingShip(gameState.selectedCells.length);
+
+    renderGrid();
+}
+
+function matchesRemainingShip(count) {
+    const sunkCounts = {};
+    for (const ship of gameState.sunkShips) {
+        sunkCounts[ship.size] = (sunkCounts[ship.size] || 0) + 1;
+    }
+    return gameState.fleet.some(ship => {
+        const remaining = ship.count - (sunkCounts[ship.size] || 0);
+        return remaining > 0 && ship.size === count;
+    });
+}
+
+function confirmSunk() {
+    if (gameState.selectedCells.length === 0) return;
+    gameState.sunkShips.push({
+        size: gameState.selectedCells.length,
+        cells: [...gameState.selectedCells]
+    });
+    saveGameState();
+    exitSelectingMode();
+    renderFleetInfo();
+    renderHeatmap();
 }
 
 function toggleHeatmap() {
@@ -262,10 +369,15 @@ function calculateHeatmap() {
 }
 
 function resetGame() {
-    if (confirm('Reset the game? This will clear all shots.')) {
+    if (confirm('Reset the game? This will clear all shots and sunk ships.')) {
         gameState.shots = {};
+        gameState.sunkShips = [];
+        gameState.selecting = false;
+        gameState.selectedCells = [];
+        exitSelectingMode();
         saveGameState();
         renderGrid();
+        renderFleetInfo();
         updateStats();
         renderHeatmap();
     }
@@ -280,6 +392,7 @@ function loadGameState() {
     if (saved) {
         const parsed = JSON.parse(saved);
         gameState.shots = parsed.shots || {};
+        gameState.sunkShips = parsed.sunkShips || [];
         gameState.heatmapVisible = parsed.heatmapVisible || false;
     }
 }

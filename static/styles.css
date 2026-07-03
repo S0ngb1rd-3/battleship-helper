@@ -64,6 +64,32 @@ h1 {
     transform: translateY(-2px);
 }
 
+.btn-warning {
+    background: #f0a500;
+    color: white;
+}
+
+.btn-warning:hover {
+    background: #d4920a;
+    transform: translateY(-2px);
+}
+
+.btn-success {
+    background: #2ecc71;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #27ae60;
+    transform: translateY(-2px);
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
 .game-area {
     display: flex;
     gap: 30px;
@@ -118,6 +144,37 @@ h1 {
 
 .grid-cell.unknown {
     background: #e0e0e0;
+}
+
+.grid-cell.sunk {
+    background: #999;
+    color: #ccc;
+    border-color: #777;
+}
+
+/* In selection mode, unselected hit cells pulse to show they're clickable */
+.selecting .grid-cell.hit {
+    animation: pulse-selectable 1.2s ease-in-out infinite;
+    cursor: crosshair;
+}
+
+.selecting .grid-cell.hit-selected {
+    background: #f0c040;
+    color: white;
+    border-color: #c8a000;
+    animation: none;
+    cursor: crosshair;
+}
+
+/* Sunk cells don't pulse in selection mode */
+.selecting .grid-cell.sunk {
+    animation: none;
+    cursor: default;
+}
+
+@keyframes pulse-selectable {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+    50%       { box-shadow: 0 0 0 5px rgba(255, 107, 107, 0); }
 }
 
 .heatmap-overlay {
