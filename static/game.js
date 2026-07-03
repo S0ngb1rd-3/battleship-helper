@@ -270,7 +270,7 @@ function calculateHeatmap() {
     const size = gameState.boardSize;
     const counts = Array(size).fill(null).map(() => Array(size).fill(0));
 
-    // Build lookup sets for fast access
+    // Build lookup sets
     const missSet = new Set();
     const hitSet = new Set();
     for (const [posStr, type] of Object.entries(gameState.shots)) {
@@ -278,13 +278,25 @@ function calculateHeatmap() {
         else if (type === 'hit') hitSet.add(posStr);
     }
 
-    // Placements that cover a known hit are far more likely than placements in
-    // open water — weight them heavily so the heat concentrates around hits and
-    // their natural extensions (the "ends" of a partially-found ship).
+    // Sunk cells are fully resolved — exclude them from the live hit set so they
+    // don't attract new placements or enforce adjacency constraints.
+    const sunkCellSet = new Set(gameState.sunkShips.flatMap(s => s.cells));
+    const liveHitSet = new Set([...hitSet].filter(k => !sunkCellSet.has(k)));
+
+    // Count how many of each ship size have been sunk to skip them in the loop.
+    const sunkCounts = {};
+    for (const ship of gameState.sunkShips) {
+        sunkCounts[ship.size] = (sunkCounts[ship.size] || 0) + 1;
+    }
+
+    // Placements covering a live hit are weighted heavily; open water gets base weight.
     const BASE_WEIGHT = 1;
     const HIT_WEIGHT = 12;
 
     for (const ship of gameState.fleet) {
+        const remaining = ship.count - (sunkCounts[ship.size] || 0);
+        if (remaining <= 0) continue; // all of this ship type are sunk
+
         // Horizontal placements
         for (let row = 0; row < size; row++) {
             for (let startCol = 0; startCol <= size - ship.size; startCol++) {
@@ -292,26 +304,23 @@ function calculateHeatmap() {
                 let valid = true;
                 let hitCoverage = 0;
 
-                // Reject if any cell in the placement is a miss
+                // Reject if any cell is a miss or a sunk cell
                 for (let c = startCol; c <= endCol; c++) {
-                    if (missSet.has(`${row},${c}`)) { valid = false; break; }
-                    if (hitSet.has(`${row},${c}`)) hitCoverage++;
+                    const k = `${row},${c}`;
+                    if (missSet.has(k) || sunkCellSet.has(k)) { valid = false; break; }
+                    if (liveHitSet.has(k)) hitCoverage++;
                 }
 
-                // Reject if any hit cell lies adjacent to but OUTSIDE this placement.
-                // Ships can't touch, so a hit next to us belongs to a different ship —
-                // meaning this placement would violate the no-adjacency rule.
+                // Reject if a live hit lies adjacent to but outside this placement
                 if (valid) {
-                    // Check the cells directly above and below each column
                     for (let c = startCol; c <= endCol && valid; c++) {
-                        if (hitSet.has(`${row - 1},${c}`) || hitSet.has(`${row + 1},${c}`)) valid = false;
+                        if (liveHitSet.has(`${row - 1},${c}`) || liveHitSet.has(`${row + 1},${c}`)) valid = false;
                     }
-                    // Check the cells just off each end of the placement
-                    if (hitSet.has(`${row},${startCol - 1}`) || hitSet.has(`${row},${endCol + 1}`)) valid = false;
+                    if (liveHitSet.has(`${row},${startCol - 1}`) || liveHitSet.has(`${row},${endCol + 1}`)) valid = false;
                 }
 
                 if (valid) {
-                    const weight = (hitCoverage > 0 ? HIT_WEIGHT : BASE_WEIGHT) * ship.count;
+                    const weight = (hitCoverage > 0 ? HIT_WEIGHT : BASE_WEIGHT) * remaining;
                     for (let c = startCol; c <= endCol; c++) {
                         counts[row][c] += weight;
                     }
@@ -326,24 +335,23 @@ function calculateHeatmap() {
                 let valid = true;
                 let hitCoverage = 0;
 
-                // Reject if any cell in the placement is a miss
+                // Reject if any cell is a miss or a sunk cell
                 for (let r = startRow; r <= endRow; r++) {
-                    if (missSet.has(`${r},${col}`)) { valid = false; break; }
-                    if (hitSet.has(`${r},${col}`)) hitCoverage++;
+                    const k = `${r},${col}`;
+                    if (missSet.has(k) || sunkCellSet.has(k)) { valid = false; break; }
+                    if (liveHitSet.has(k)) hitCoverage++;
                 }
 
-                // Reject if any hit cell lies adjacent to but outside this placement
+                // Reject if a live hit lies adjacent to but outside this placement
                 if (valid) {
-                    // Check the cells directly left and right of each row
                     for (let r = startRow; r <= endRow && valid; r++) {
-                        if (hitSet.has(`${r},${col - 1}`) || hitSet.has(`${r},${col + 1}`)) valid = false;
+                        if (liveHitSet.has(`${r},${col - 1}`) || liveHitSet.has(`${r},${col + 1}`)) valid = false;
                     }
-                    // Check the cells just off each end of the placement
-                    if (hitSet.has(`${startRow - 1},${col}`) || hitSet.has(`${endRow + 1},${col}`)) valid = false;
+                    if (liveHitSet.has(`${startRow - 1},${col}`) || liveHitSet.has(`${endRow + 1},${col}`)) valid = false;
                 }
 
                 if (valid) {
-                    const weight = (hitCoverage > 0 ? HIT_WEIGHT : BASE_WEIGHT) * ship.count;
+                    const weight = (hitCoverage > 0 ? HIT_WEIGHT : BASE_WEIGHT) * remaining;
                     for (let r = startRow; r <= endRow; r++) {
                         counts[r][col] += weight;
                     }
@@ -352,8 +360,12 @@ function calculateHeatmap() {
         }
     }
 
-    // Zero out already-shot cells — their state is known, no point targeting them
+    // Zero out already-shot and sunk cells — their state is known
     for (const posStr of Object.keys(gameState.shots)) {
+        const [r, c] = posStr.split(',').map(Number);
+        counts[r][c] = 0;
+    }
+    for (const posStr of sunkCellSet) {
         const [r, c] = posStr.split(',').map(Number);
         counts[r][c] = 0;
     }
