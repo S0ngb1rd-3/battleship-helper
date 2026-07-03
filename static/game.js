@@ -93,12 +93,12 @@ function toggleShot(row, col) {
     const shotKey = `${row},${col}`;
     const current = gameState.shots[shotKey];
 
-    if (current === 'hit') {
-        gameState.shots[shotKey] = 'miss';
-    } else if (current === 'miss') {
+    if (current === 'miss') {
+        gameState.shots[shotKey] = 'hit';
+    } else if (current === 'hit') {
         delete gameState.shots[shotKey];
     } else {
-        gameState.shots[shotKey] = 'hit';
+        gameState.shots[shotKey] = 'miss';
     }
 
     saveGameState();
