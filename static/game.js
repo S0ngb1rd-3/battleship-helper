@@ -171,22 +171,38 @@ function exitSelectingMode() {
 
 function toggleSelectCell(row, col) {
     const key = `${row},${col}`;
-    // Only hit cells that aren't already sunk can be selected
     const sunkCellSet = new Set(gameState.sunkShips.flatMap(s => s.cells));
     if (gameState.shots[key] !== 'hit' || sunkCellSet.has(key)) return;
 
     const idx = gameState.selectedCells.indexOf(key);
     if (idx >= 0) {
+        // Already selected — deselect just this cell so the user can adjust
         gameState.selectedCells.splice(idx, 1);
     } else {
-        gameState.selectedCells.push(key);
+        // Auto-select the entire connected hit cluster from this cell
+        gameState.selectedCells = getConnectedHits(key);
     }
 
-    // Enable confirm if selection count matches any remaining ship size
     const confirmBtn = document.getElementById('confirmSunkBtn');
     confirmBtn.disabled = !matchesRemainingShip(gameState.selectedCells.length);
 
     renderGrid();
+}
+
+function getConnectedHits(startKey) {
+    const sunkCellSet = new Set(gameState.sunkShips.flatMap(s => s.cells));
+    const visited = new Set();
+    const queue = [startKey];
+
+    while (queue.length > 0) {
+        const key = queue.shift();
+        if (visited.has(key) || gameState.shots[key] !== 'hit' || sunkCellSet.has(key)) continue;
+        visited.add(key);
+        const [r, c] = key.split(',').map(Number);
+        queue.push(`${r-1},${c}`, `${r+1},${c}`, `${r},${c-1}`, `${r},${c+1}`);
+    }
+
+    return [...visited];
 }
 
 function matchesRemainingShip(count) {
