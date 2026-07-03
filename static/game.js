@@ -141,12 +141,20 @@ function renderFleetInfo() {
 }
 
 function enterSelectingMode() {
-    // Only enter if there are unsunk hit cells to select
-    const sunkCellSet = new Set(gameState.sunkShips.flatMap(s => s.cells));
-    const liveHits = Object.entries(gameState.shots)
-        .filter(([k, v]) => v === 'hit' && !sunkCellSet.has(k));
-    if (liveHits.length === 0) return;
+    const clusters = findAllLiveHitClusters();
+    if (clusters.length === 0) return;
 
+    // If there's exactly one linear cluster matching a remaining ship, auto-confirm
+    if (clusters.length === 1 && isLinear(clusters[0]) && matchesRemainingShip(clusters[0].length)) {
+        gameState.sunkShips.push({ size: clusters[0].length, cells: clusters[0] });
+        saveGameState();
+        renderGrid();
+        renderFleetInfo();
+        renderHeatmap();
+        return;
+    }
+
+    // Otherwise enter manual selection mode
     gameState.selecting = true;
     gameState.selectedCells = [];
 
@@ -156,6 +164,31 @@ function enterSelectingMode() {
     document.getElementById('cancelSunkBtn').style.display = 'inline-block';
 
     renderGrid();
+}
+
+function findAllLiveHitClusters() {
+    const sunkCellSet = new Set(gameState.sunkShips.flatMap(s => s.cells));
+    const remaining = new Set(
+        Object.entries(gameState.shots)
+            .filter(([k, v]) => v === 'hit' && !sunkCellSet.has(k))
+            .map(([k]) => k)
+    );
+
+    const clusters = [];
+    for (const key of [...remaining]) {
+        if (!remaining.has(key)) continue;
+        const cluster = getConnectedHits(key);
+        clusters.push(cluster);
+        for (const k of cluster) remaining.delete(k);
+    }
+    return clusters;
+}
+
+function isLinear(cells) {
+    if (cells.length <= 1) return true;
+    const rows = new Set(cells.map(k => k.split(',')[0]));
+    const cols = new Set(cells.map(k => k.split(',')[1]));
+    return rows.size === 1 || cols.size === 1;
 }
 
 function exitSelectingMode() {
