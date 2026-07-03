@@ -380,8 +380,13 @@ function calculateHeatmap() {
     return counts.map(row => row.map(v => v / max));
 }
 
-function resetGame() {
+async function resetGame() {
     if (confirm('Reset the game? This will clear all shots and sunk ships.')) {
+        const response = await fetch('/api/config');
+        config = await response.json();
+        gameState.boardSize = config.boardSize;
+        gameState.fleet = config.fleet;
+
         gameState.shots = {};
         gameState.sunkShips = [];
         gameState.selecting = false;
