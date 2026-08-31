@@ -80,7 +80,7 @@ function applyConfig(cfg, restoreState = false) {
 function setupEventListeners() {
     document.getElementById('configSelect').addEventListener('change', e => {
         const cfg = allConfigs.find(c => c.name === e.target.value);
-        if (cfg) { activeConfig = cfg; resetGame(/* skipConfirm= */ true); }
+        if (cfg) applyConfig(cfg);
     });
     document.getElementById('editConfigsBtn').addEventListener('click', openConfigEditor);
     document.getElementById('toggleHeatmapBtn').addEventListener('click', toggleHeatmap);
